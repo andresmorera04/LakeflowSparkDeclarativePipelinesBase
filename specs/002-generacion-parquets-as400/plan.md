@@ -16,7 +16,7 @@ Crear 3 notebooks Python (.py) compatibles con Azure Databricks para generar arc
 **Plataforma Destino**: Azure Databricks con Computo Serverless
 **Tipo de Proyecto**: Notebooks de generacion de datos (simuladores de landing zone)
 **Metas de Rendimiento**: Generacion de 5M/15M/5M registros en menos de 10 minutos cada uno en Computo Serverless (CE-001, CE-002, CE-003)
-**Restricciones**: Compatible con Computo Serverless, cero valores hardcodeados, nombres exclusivamente hebreos/egipcios/ingleses
+**Restricciones**: Compatible con Computo Serverless (spark.sparkContext PROHIBIDO — V2-R5-D1), protocolo abfss:// obligatorio para rutas de parquets (V2-R5-D2), cero valores hardcodeados, nombres exclusivamente hebreos/egipcios/ingleses
 **Escala/Alcance**: 3 notebooks generadores + suite TDD, 70+60+100 = 230 columnas totales, volumetrias de millones de filas
 
 ## Verificacion de Constitucion (Pre-Diseno)
@@ -27,13 +27,15 @@ Crear 3 notebooks Python (.py) compatibles con Azure Databricks para generar arc
 |---|-----------|--------|-----------|
 | I | Dinamismo Absoluto (Cero Hard-Coded) | PASA | RF-002: todos los valores via `dbutils.widgets`. RF-018: offsets parametrizables. CE-008: cero hardcoded. |
 | II | Entorno de Desarrollo Databricks | PASA | Supuesto: extensiones configuradas (R4-D1 de V1). RF-015: notebooks ejecutados en Databricks. |
+| XI | Compatibilidad Maxima Serverless | PASA | V2-R5-D1: Cero uso de spark.sparkContext. Distribucion de datos via closures Python (cloudpickle). Confirmado en ejecucion real. |
+| XII | Protocolo abfss:// Obligatorio | PASA | V2-R5-D2: Todas las rutas de widgets usan abfss://container@storageaccount.dfs.core.windows.net/. Cero rutas /mnt/. |
 | III | Desarrollo Guiado por Pruebas (TDD) | PASA | RF-014: suite TDD en `tests/GenerarParquets/`. Historia 4: suite completa. CE-007: cobertura RF-001 a RF-018. |
 | IV | Simulacion de Datos AS400 (Landing Zone) | PASA | RF-003/006/010: estructuras R2-D1/D2/D4 aprobadas. RF-005: nombres hebreos/egipcios/ingleses (R3-D1). RF-004: 5M + 0.60%. RF-007: 15M. RF-011: 1:1. |
 | V | LSDP Estricto | PASA | RF-015: notebooks independientes de LSDP. No generan pipeline, solo datos de entrada. |
 | VI | Arquitectura Medallon | N/A | Version 2 genera datos de landing zone, no pipeline medallon. Se aplica en V3-V5. |
 | VII | Estructura de Proyecto LSDP | PASA | RF-012: notebooks en `scripts/GenerarParquets/`. RF-014: pruebas en `tests/GenerarParquets/`. |
 | VIII | Gobernanza del Repositorio | PASA | No se crean branches ni commits automaticos. Solo directorios convencionales. |
-| IX | Gobernanza de la IA | PASA | Todas las decisiones de V1 aprobadas por el usuario (R2-D1 a R2-D4, R3-D1). Clarificaciones de V2 aprobadas interactivamente. |
+| IX | Gobernanza de la IA | PASA | Todas las decisiones de V1 aprobadas por el usuario (R2-D1 a R2-D4, R3-D1). Clarificaciones de V2 aprobadas interactivamente. V2-R5-D1 y V2-R5-D2 aprobadas post-implementacion. |
 | X | Idioma y Comunicacion | PASA | RF-013: codigo en espanol, snake_case. RF-001: markdown explicativo y profesional. |
 
 **Resultado del Gate**: APROBADO. Cero violaciones. Se procede a Fase 0.
@@ -79,16 +81,18 @@ tests/
 |---|-----------|--------|----------------------|
 | I | Dinamismo Absoluto | PASA | data-model.md define 61 widgets parametrizables (17 Maestro + 33 Transaccional + 11 Saldos). Cero hardcoded. |
 | II | Entorno Databricks | PASA | quickstart.md documenta Computo Serverless. Extensiones R4-D1 referenciadas. |
+| XI | Compatibilidad Maxima Serverless | PASA | Cero uso de spark.sparkContext en codigo. Closures Python para mapInPandas (V2-R5-D1). |
+| XII | Protocolo abfss:// Obligatorio | PASA | Todas las rutas por defecto en widgets usan abfss://. Cero /mnt/ en codigo de produccion (V2-R5-D2). |
 | III | TDD | PASA | 3 notebooks de prueba en tests/GenerarParquets/. 21 reglas de validacion (RV-01 a RV-21). |
 | IV | Simulacion AS400 | PASA | data-model.md mapea E1 (70 campos), E2 (60 campos), E3 (100 campos). Nombres R3-D1. 15 tipos R2-D3. |
 | V | LSDP Estricto | PASA | research.md V2-R1 confirma independencia de LSDP. |
 | VI | Arquitectura Medallon | N/A | V2 genera landing zone solamente. |
 | VII | Estructura Proyecto LSDP | PASA | scripts/GenerarParquets/ + tests/GenerarParquets/ confirmados. |
 | VIII | Gobernanza del Repositorio | PASA | Sin branches ni commits automaticos. |
-| IX | Gobernanza de la IA | PASA | 2 decisiones APROBADAS (V2-R2-D1, V2-R3-D1) el 2026-03-28. |
+| IX | Gobernanza de la IA | PASA | 4 decisiones APROBADAS (V2-R2-D1, V2-R3-D1, V2-R5-D1, V2-R5-D2) el 2026-03-28. |
 | X | Idioma y Comunicacion | PASA | Artefactos en espanol. Fuentes oficiales. |
 
-**Resultado Gate Post-Diseno**: APROBADO (10/10 PASAN o N/A). Cero violaciones.
+**Resultado Gate Post-Diseno**: APROBADO (12/12 PASAN o N/A). Cero violaciones.
 
 ## Artefactos Generados
 
@@ -109,8 +113,10 @@ tests/
 |----|------|------------------|--------|
 | V2-R2-D1 | `dbutils.widgets.text()` como tipo principal | Aprobar | APROBADA (2026-03-28) |
 | V2-R3-D1 | `write.parquet()` + StructType + reparticion | Aprobar | APROBADA (2026-03-28) |
+| V2-R5-D1 | Prohibir `spark.sparkContext` en Serverless | Aprobar — closures Python | APROBADA (2026-03-28) |
+| V2-R5-D2 | Protocolo `abfss://` obligatorio para parquets | Aprobar — estandar Unity Catalog | APROBADA (2026-03-28) |
 
-**Todas las decisiones aprobadas por el usuario el 2026-03-28**. Detalle completo en [research.md](research.md).
+**Todas las decisiones aprobadas por el usuario el 2026-03-28**. Detalle completo en [research.md](research.md). Las decisiones V2-R5-D1 y V2-R5-D2 fueron incorporadas post-implementacion como resultado del feedback de pruebas de ejecucion en Computo Serverless y se han agregado como reglas permanentes en la Constitucion del proyecto.
 
 ## Seguimiento de Complejidad
 

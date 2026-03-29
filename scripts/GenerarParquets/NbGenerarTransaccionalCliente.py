@@ -24,8 +24,8 @@
 # COMMAND ----------
 
 # Parametros de rutas y volumetria
-dbutils.widgets.text("ruta_salida_parquet", "/mnt/external-location/landing/transaccional", "Ruta de Salida del Parquet")
-dbutils.widgets.text("ruta_maestro_clientes", "/mnt/external-location/landing/maestro_clientes", "Ruta del Parquet del Maestro")
+dbutils.widgets.text("ruta_salida_parquet", "abfss://container@storageaccount.dfs.core.windows.net/landing/transaccional", "Ruta de Salida del Parquet")
+dbutils.widgets.text("ruta_maestro_clientes", "abfss://container@storageaccount.dfs.core.windows.net/landing/maestro_clientes", "Ruta del Parquet del Maestro")
 dbutils.widgets.text("cantidad_registros", "15000000", "Cantidad de Registros a Generar")
 dbutils.widgets.text("fecha_transaccion", "", "Fecha de Transaccion (YYYY-MM-DD)")
 dbutils.widgets.text("offset_trxid", "1", "Offset Inicial del TRXID Secuencial")
@@ -346,14 +346,16 @@ print(f"  Baja ({len(tipos_baja)} tipos): {peso_por_tipo_baja:.1f}% c/u = {pesos
 
 # COMMAND ----------
 
-# Broadcast de datos necesarios para la generacion distribuida
-bc_custids = spark.sparkContext.broadcast(lista_custids)
-bc_tipos = spark.sparkContext.broadcast(lista_tipos_ordenada)
-bc_pesos = spark.sparkContext.broadcast(lista_pesos_normalizados)
-bc_rangos = spark.sparkContext.broadcast(rangos_montos)
-bc_catalogo = spark.sparkContext.broadcast(catalogo_transacciones)
-bc_canales = spark.sparkContext.broadcast(canales_por_tipo)
-bc_fecha_trx = spark.sparkContext.broadcast(fecha_trx_parsed)
+# Datos capturados por closure para generacion distribuida (compatible con Serverless)
+datos_transaccional = {
+    "custids": list(lista_custids),
+    "tipos": list(lista_tipos_ordenada),
+    "pesos": list(lista_pesos_normalizados),
+    "rangos": dict(rangos_montos),
+    "catalogo": dict(catalogo_transacciones),
+    "canales": dict(canales_por_tipo),
+    "fecha_trx": fecha_trx_parsed
+}
 
 # COMMAND ----------
 
@@ -369,13 +371,13 @@ def generar_registros_transaccional(iterador_particiones, offset_base, prefijo_f
     montos segmentados por tipo.
     T014 — TRXID con prefijo de fecha + secuencial, TRXTM con horas/minutos/segundos.
     """
-    custids = bc_custids.value
-    tipos = bc_tipos.value
-    pesos = bc_pesos.value
-    rangos = bc_rangos.value
-    catalogo = bc_catalogo.value
-    canales = bc_canales.value
-    fecha_trx = bc_fecha_trx.value
+    custids = datos_transaccional["custids"]
+    tipos = datos_transaccional["tipos"]
+    pesos = datos_transaccional["pesos"]
+    rangos = datos_transaccional["rangos"]
+    catalogo = datos_transaccional["catalogo"]
+    canales = datos_transaccional["canales"]
+    fecha_trx = datos_transaccional["fecha_trx"]
 
     lista_estados_trx = ["OK", "OK", "OK", "OK", "OK", "OK", "OK", "OK", "RV", "PN"]
     lista_monedas = ["USD", "USD", "USD", "EUR", "GBP", "ILS", "EGP"]

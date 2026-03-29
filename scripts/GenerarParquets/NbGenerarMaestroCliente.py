@@ -27,7 +27,7 @@
 
 # T004 — Definicion de 17 widgets via dbutils.widgets.text()
 # Parametros de rutas y volumetria
-dbutils.widgets.text("ruta_salida_parquet", "/mnt/external-location/landing/maestro_clientes", "Ruta de Salida del Parquet")
+dbutils.widgets.text("ruta_salida_parquet", "abfss://container@storageaccount.dfs.core.windows.net/landing/maestro_clientes", "Ruta de Salida del Parquet")
 dbutils.widgets.text("cantidad_registros_base", "5000000", "Cantidad de Registros Base")
 dbutils.widgets.text("pct_incremento", "0.006", "Porcentaje de Incremento (0.60%)")
 dbutils.widgets.text("pct_mutacion", "0.20", "Porcentaje de Mutacion (20%)")
@@ -445,37 +445,42 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import ArrayType, IntegerType
 import datetime
 
-# Broadcast de los catalogos para uso eficiente en las particiones
-bc_nombres = spark.sparkContext.broadcast(catalogo_nombres)
-bc_apellidos = spark.sparkContext.broadcast(catalogo_apellidos)
-bc_generos = spark.sparkContext.broadcast(lista_generos)
-bc_tipos_doc = spark.sparkContext.broadcast(lista_tipos_documento)
-bc_nacionalidades = spark.sparkContext.broadcast(lista_nacionalidades)
-bc_estados_civiles = spark.sparkContext.broadcast(lista_estados_civiles)
-bc_ciudades = spark.sparkContext.broadcast(lista_ciudades)
-bc_estados = spark.sparkContext.broadcast(lista_estados)
-bc_paises = spark.sparkContext.broadcast(lista_paises)
-bc_ocupaciones = spark.sparkContext.broadcast(lista_ocupaciones)
-bc_empleadores = spark.sparkContext.broadcast(lista_empleadores)
-bc_sucursales = spark.sparkContext.broadcast(lista_sucursales)
-bc_nombres_sucursal = spark.sparkContext.broadcast(lista_nombres_sucursal)
-bc_segmentos = spark.sparkContext.broadcast(lista_segmentos)
-bc_categorias = spark.sparkContext.broadcast(lista_categorias)
-bc_niveles_riesgo = spark.sparkContext.broadcast(lista_niveles_riesgo)
-bc_tipos_producto = spark.sparkContext.broadcast(lista_tipos_producto)
-bc_estados_cuenta = spark.sparkContext.broadcast(lista_estados_cuenta)
-bc_idiomas = spark.sparkContext.broadcast(lista_idiomas)
-bc_niveles_educacion = spark.sparkContext.broadcast(lista_niveles_educacion)
-bc_fuentes_ingreso = spark.sparkContext.broadcast(lista_fuentes_ingreso)
-bc_tipos_relacion = spark.sparkContext.broadcast(lista_tipos_relacion)
-bc_pref_notif = spark.sparkContext.broadcast(lista_preferencias_notificacion)
-
-# Parametros monetarios como broadcast
-bc_rango_credlmt = spark.sparkContext.broadcast((rango_credlmt_min, rango_credlmt_max))
-bc_rango_avlbal = spark.sparkContext.broadcast((rango_avlbal_min, rango_avlbal_max))
-bc_rango_income = spark.sparkContext.broadcast((rango_income_min, rango_income_max))
-bc_rango_loan = spark.sparkContext.broadcast((rango_loan_min, rango_loan_max))
-bc_rango_ins = spark.sparkContext.broadcast((rango_ins_min, rango_ins_max))
+# Catalogos y parametros empaquetados en diccionarios Python para captura por closure.
+# En Databricks Serverless no se soporta spark.sparkContext.broadcast()
+# (JVM_ATTRIBUTE_NOT_SUPPORTED). Los diccionarios son serializados automaticamente
+# por cloudpickle cuando mapInPandas distribuye la funcion a los workers.
+datos_catalogos = {
+    "nombres": catalogo_nombres,
+    "apellidos": catalogo_apellidos,
+    "generos": lista_generos,
+    "tipos_doc": lista_tipos_documento,
+    "nacionalidades": lista_nacionalidades,
+    "estados_civiles": lista_estados_civiles,
+    "ciudades": lista_ciudades,
+    "estados": lista_estados,
+    "paises": lista_paises,
+    "ocupaciones": lista_ocupaciones,
+    "empleadores": lista_empleadores,
+    "sucursales": lista_sucursales,
+    "nombres_sucursal": lista_nombres_sucursal,
+    "segmentos": lista_segmentos,
+    "categorias": lista_categorias,
+    "niveles_riesgo": lista_niveles_riesgo,
+    "tipos_producto": lista_tipos_producto,
+    "estados_cuenta": lista_estados_cuenta,
+    "idiomas": lista_idiomas,
+    "niveles_educacion": lista_niveles_educacion,
+    "fuentes_ingreso": lista_fuentes_ingreso,
+    "tipos_relacion": lista_tipos_relacion,
+    "pref_notif": lista_preferencias_notificacion,
+}
+datos_rangos = {
+    "credlmt": (rango_credlmt_min, rango_credlmt_max),
+    "avlbal": (rango_avlbal_min, rango_avlbal_max),
+    "income": (rango_income_min, rango_income_max),
+    "loan": (rango_loan_min, rango_loan_max),
+    "ins": (rango_ins_min, rango_ins_max),
+}
 
 # COMMAND ----------
 
@@ -492,34 +497,34 @@ def generar_registros_maestro(iterador_particiones, offset_base, cantidad_total,
     Funcion generadora que produce registros del Maestro de Clientes.
     Se ejecuta en cada particion de forma distribuida.
     """
-    nombres = bc_nombres.value
-    apellidos = bc_apellidos.value
-    generos = bc_generos.value
-    tipos_doc = bc_tipos_doc.value
-    nacionalidades = bc_nacionalidades.value
-    estados_civiles = bc_estados_civiles.value
-    ciudades = bc_ciudades.value
-    estados = bc_estados.value
-    paises = bc_paises.value
-    ocupaciones = bc_ocupaciones.value
-    empleadores = bc_empleadores.value
-    sucursales = bc_sucursales.value
-    nombres_suc = bc_nombres_sucursal.value
-    segmentos = bc_segmentos.value
-    categorias = bc_categorias.value
-    niveles_riesgo = bc_niveles_riesgo.value
-    tipos_producto = bc_tipos_producto.value
-    estados_cuenta = bc_estados_cuenta.value
-    idiomas = bc_idiomas.value
-    educacion = bc_niveles_educacion.value
-    fuentes = bc_fuentes_ingreso.value
-    tipos_rel = bc_tipos_relacion.value
-    pref_notif = bc_pref_notif.value
-    r_credlmt = bc_rango_credlmt.value
-    r_avlbal = bc_rango_avlbal.value
-    r_income = bc_rango_income.value
-    r_loan = bc_rango_loan.value
-    r_ins = bc_rango_ins.value
+    nombres = datos_catalogos["nombres"]
+    apellidos = datos_catalogos["apellidos"]
+    generos = datos_catalogos["generos"]
+    tipos_doc = datos_catalogos["tipos_doc"]
+    nacionalidades = datos_catalogos["nacionalidades"]
+    estados_civiles = datos_catalogos["estados_civiles"]
+    ciudades = datos_catalogos["ciudades"]
+    estados = datos_catalogos["estados"]
+    paises = datos_catalogos["paises"]
+    ocupaciones = datos_catalogos["ocupaciones"]
+    empleadores = datos_catalogos["empleadores"]
+    sucursales = datos_catalogos["sucursales"]
+    nombres_suc = datos_catalogos["nombres_sucursal"]
+    segmentos = datos_catalogos["segmentos"]
+    categorias = datos_catalogos["categorias"]
+    niveles_riesgo = datos_catalogos["niveles_riesgo"]
+    tipos_producto = datos_catalogos["tipos_producto"]
+    estados_cuenta = datos_catalogos["estados_cuenta"]
+    idiomas = datos_catalogos["idiomas"]
+    educacion = datos_catalogos["niveles_educacion"]
+    fuentes = datos_catalogos["fuentes_ingreso"]
+    tipos_rel = datos_catalogos["tipos_relacion"]
+    pref_notif = datos_catalogos["pref_notif"]
+    r_credlmt = datos_rangos["credlmt"]
+    r_avlbal = datos_rangos["avlbal"]
+    r_income = datos_rangos["income"]
+    r_loan = datos_rangos["loan"]
+    r_ins = datos_rangos["ins"]
 
     fecha_hoy = datetime.date.today()
 
@@ -700,17 +705,18 @@ if not es_primera_ejecucion:
     # Aplicar mutaciones en los 15 campos demograficos
     # Campos a mutar: ADDR1, ADDR2, CITY, STATE, ZPCDE, PHONE1, PHONE2, EMAIL,
     #                  MRTLST, OCCPTN, EMPLYR, EMPADS, SGMNT, RISKLV, RSKSCR
-    bc_ciudades_mut = spark.sparkContext.broadcast(lista_ciudades)
-    bc_estados_mut = spark.sparkContext.broadcast(lista_estados)
-    bc_ocupaciones_mut = spark.sparkContext.broadcast(lista_ocupaciones)
-    bc_empleadores_mut = spark.sparkContext.broadcast(lista_empleadores)
+    # Datos para mutacion capturados por closure (compatible con Serverless)
+    ciudades_mut = list(lista_ciudades)
+    estados_mut = list(lista_estados)
+    ocupaciones_mut = list(lista_ocupaciones)
+    empleadores_mut = list(lista_empleadores)
 
     def mutar_registros(iterador):
         """Mutar los 15 campos demograficos de los registros seleccionados."""
-        ciudades_loc = bc_ciudades_mut.value
-        estados_loc = bc_estados_mut.value
-        ocupaciones_loc = bc_ocupaciones_mut.value
-        empleadores_loc = bc_empleadores_mut.value
+        ciudades_loc = ciudades_mut
+        estados_loc = estados_mut
+        ocupaciones_loc = ocupaciones_mut
+        empleadores_loc = empleadores_mut
         estados_civiles_loc = ["S", "C", "D", "V"]
         segmentos_loc = ["VIP", "PREM", "STD", "BAS"]
         niveles_riesgo_loc = ["01", "02", "03", "04", "05"]

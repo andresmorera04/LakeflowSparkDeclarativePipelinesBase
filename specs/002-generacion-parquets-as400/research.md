@@ -76,7 +76,7 @@ La Version 2 genera notebooks de simulacion de datos (landing zone), NO pipeline
 # Definicion del widget con valor por defecto
 dbutils.widgets.text(
     name='ruta_salida_parquet',
-    defaultValue='/mnt/external-location/landing/maestro_clientes',
+    defaultValue='abfss://container@storageaccount.dfs.core.windows.net/landing/maestro_clientes',
     label='Ruta de Salida del Parquet'
 )
 
@@ -124,6 +124,7 @@ ruta_salida = dbutils.widgets.get('ruta_salida_parquet')
 - **External Location**: Combina una ruta de almacenamiento en la nube (ADLS Gen2) con una credencial de almacenamiento (Storage Credential). Unity Catalog controla el acceso.
 - **Acceso basado en rutas**: Databricks recomienda rutas de tabla o `/Volumes`, pero para archivos parquet crudos (landing zone), el acceso directo a External Location via ruta es valido y apropiado.
 - **Compatibilidad Serverless**: `df.write.parquet()` es completamente compatible con Computo Serverless. No requiere configuracion adicional.
+- **RESTRICCION SERVERLESS**: `spark.sparkContext.broadcast()` NO es compatible con Serverless. Se debe usar closures Python para distribuir datos a workers en `mapInPandas` (ver V2-R5).
 
 #### H-V2-R3.2 - Optimizacion de Escritura a Escala
 
@@ -194,6 +195,8 @@ Para el acenario de re-ejecucion del Maestro de Clientes (RF-004):
 |----|------|----------|------------------|------------------|--------|
 | V2-R2-D1 | Tipo de widget principal | `text()` con conversion explicita | Aprobar `text()` como tipo principal | **APROBADA** (2026-03-28) | CERRADA |
 | V2-R3-D1 | Estrategia de escritura parquets | `write.parquet()` + StructType + reparticion | Aprobar patron estandar PySpark | **APROBADA** (2026-03-28) | CERRADA |
+| V2-R5-D1 | Prohibir spark.sparkContext en Serverless | Closures Python via cloudpickle | Aprobar — unica alternativa compatible | **APROBADA** (2026-03-28) | CERRADA |
+| V2-R5-D2 | Protocolo abfss:// obligatorio | abfss:// en lugar de /mnt/ | Aprobar — estandar Unity Catalog | **APROBADA** (2026-03-28) | CERRADA |
 
 ### Decisiones Heredadas de V1 (Vigentes sin Cambios)
 
@@ -205,6 +208,86 @@ Para el acenario de re-ejecucion del Maestro de Clientes (RF-004):
 | R4-D1, R4-D2 | Testing mixto, autenticacion Azure AD | VIGENTES |
 | R5-D1, R5-D2 | Conexion Azure SQL, utilidad en utilities/ | VIGENTES |
 
-**Total decisiones nuevas**: 2 (APROBADAS 2026-03-28)
+**Total decisiones nuevas**: 4 (APROBADAS 2026-03-28)
 **Total decisiones heredadas**: 15 (todas vigentes)
-**Total general**: 17/17 APROBADAS
+**Total general**: 19/19 APROBADAS
+**Total general**: 19/19 APROBADAS
+
+---
+
+## Research V2-R5: Compatibilidad con Computo Serverless — Restricciones de Acceso JVM (Post-Implementacion)
+
+### Fuentes Consultadas
+
+1. https://learn.microsoft.com/es-es/azure/databricks/compute/serverless/ (Computo Serverless - Documentacion oficial Azure)
+2. https://docs.databricks.com/aws/en/compute/serverless.html (Serverless compute - Databricks)
+
+### Contexto
+
+Durante las pruebas de ejecucion de los notebooks generadores en Computo Serverless, se detecto un error critico: `[JVM_ATTRIBUTE_NOT_SUPPORTED] Directly accessing the underlying Spark driver JVM using the attribute 'sparkContext' is not supported on serverless compute`. Este hallazgo afecto la implementacion original que usaba `spark.sparkContext.broadcast()` para distribuir datos a los workers en funciones `mapInPandas`.
+
+### Hallazgos Principales
+
+#### H-V2-R5.1 - APIs Prohibidas en Computo Serverless
+
+El Computo Serverless de Databricks **bloquea el acceso directo al JVM del driver**. Las siguientes APIs estan **PROHIBIDAS**:
+
+| API Prohibida | Error | Alternativa |
+|---------------|-------|-------------|
+| `spark.sparkContext.broadcast()` | JVM_ATTRIBUTE_NOT_SUPPORTED | Variables Python capturadas por closure (cloudpickle) |
+| `spark.sparkContext.parallelize()` | JVM_ATTRIBUTE_NOT_SUPPORTED | `spark.createDataFrame()` o `spark.range()` |
+| `spark.sparkContext.accumulator()` | JVM_ATTRIBUTE_NOT_SUPPORTED | Agregaciones con `groupBy()` o variables Python locales |
+| `spark.sparkContext.setJobGroup()` | JVM_ATTRIBUTE_NOT_SUPPORTED | No aplica en Serverless — los jobs se gestionan automaticamente |
+| `spark.sparkContext.addFile()` | JVM_ATTRIBUTE_NOT_SUPPORTED | Unity Catalog Volumes o rutas abfss:// |
+| `spark.sparkContext.addPyFile()` | JVM_ATTRIBUTE_NOT_SUPPORTED | `%pip install` o cluster libraries |
+
+#### H-V2-R5.2 - Patron de Distribucion de Datos con Closures (Alternativa a Broadcast)
+
+Para funciones `mapInPandas` que necesitan datos de referencia en los workers, el patron correcto en Serverless es:
+
+```python
+# CORRECTO — Variables Python capturadas por closure
+datos = {
+    "catalogos": list(mi_lista),
+    "rangos": dict(mis_rangos)
+}
+
+def mi_funcion_mapinpandas(iterador):
+    # cloudpickle serializa automaticamente 'datos' al worker
+    catalogos_local = datos["catalogos"]
+    rangos_local = datos["rangos"]
+    for pdf in iterador:
+        # ... procesamiento con catalogos_local y rangos_local
+        yield pdf
+
+# INCORRECTO — spark.sparkContext.broadcast() -> ERROR en Serverless
+# bc_datos = spark.sparkContext.broadcast(mi_lista)  # PROHIBIDO
+```
+
+**Mecanismo**: Cuando PySpark ejecuta `mapInPandas`, serializa la funcion Python y sus variables capturadas usando `cloudpickle`. Las variables referenciadas dentro de la funcion (closures) son automaticamente empaquetadas y enviadas a cada worker. Este mecanismo es transparente y compatible con Serverless.
+
+**Rendimiento**: Para volumenes de datos de referencia pequenos a medianos (catalogos, listas, diccionarios < 100MB), el rendimiento es equivalente al broadcast. Para datos masivos, se recomienda usar un join distribuido en lugar de enviar datos a cada worker.
+
+#### H-V2-R5.3 - Protocolo abfss:// como Estandar Obligatorio
+
+Las rutas de almacenamiento deben usar el protocolo `abfss://` (Azure Blob File System Secure) en lugar de `/mnt/` (DBFS mounts):
+
+| Aspecto | `/mnt/` (Legacy) | `abfss://` (Recomendado) |
+|---------|-------------------|--------------------------|
+| Compatibilidad Unity Catalog | Limitada | Completa |
+| Gobernanza de acceso | Via DBFS mount point | Via Storage Credential + External Location |
+| Soporte Serverless | Parcial (deprecado) | Completo |
+| Formato | `/mnt/nombre-mount/ruta/` | `abfss://container@account.dfs.core.windows.net/ruta/` |
+| Auditoria | Limitada | Completa via Unity Catalog |
+
+### Decision Requerida - Research V2-R5
+
+> **DECISION V2-R5-D1**: Prohibir el uso de `spark.sparkContext` y cualquier acceso directo al JVM en todos los notebooks del proyecto. Usar variables Python capturadas por closure como alternativa a `broadcast()` para distribuir datos en funciones `mapInPandas`.
+> - **Recomendacion IA**: Aprobar. Es la unica alternativa compatible con Serverless. El rendimiento con closures es equivalente para los volumenes de datos de referencia utilizados (catalogos de nombres, rangos de montos, tipos de transaccion).
+> - **Evidencia**: Error `JVM_ATTRIBUTE_NOT_SUPPORTED` confirmado en ejecucion real en Databricks Serverless (2026-03-28).
+> - **Decision del usuario**: APROBADA (2026-03-28). Hallazgo critico de las pruebas de ejecucion en Computo Serverless. Se incorpora como regla permanente en la Constitucion del proyecto.
+
+> **DECISION V2-R5-D2**: Adoptar el protocolo `abfss://` como estandar obligatorio para todas las rutas de lectura y escritura de parquets, reemplazando cualquier referencia a `/mnt/`.
+> - **Recomendacion IA**: Aprobar. El protocolo `abfss://` es el estandar recomendado por Databricks y Microsoft para ADLS Gen2 con Unity Catalog.
+> - **Evidencia**: Mejores practicas de Unity Catalog y External Locations de la documentacion oficial.
+> - **Decision del usuario**: APROBADA (2026-03-28). Se incorpora como regla permanente en la Constitucion del proyecto.

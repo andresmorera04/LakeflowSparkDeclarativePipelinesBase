@@ -2,8 +2,8 @@
 
 **Feature**: 002-generacion-parquets-as400
 **Fecha**: 2026-03-28
-**Estado**: COMPLETA — 2/2 decisiones APROBADAS (2026-03-28). Listo para `/speckit.implement`.
-**Base**: Research V1 (15/15 decisiones aprobadas) + Research V2 (2/2 decisiones aprobadas)
+**Estado**: IMPLEMENTADA Y VERIFICADA — 4/4 decisiones APROBADAS. Suite TDD ejecutada exitosamente en Computo Serverless (2026-03-29). 3/3 notebooks generadores operativos, 3/3 suites de pruebas PASADAS al 100%.
+**Base**: Research V1 (15/15 decisiones aprobadas) + Research V2 (4/4 decisiones aprobadas, incluyendo V2-R5-D1 y V2-R5-D2)
 
 ---
 
@@ -21,6 +21,23 @@ La Version 2 crea 3 notebooks Python (.py) que generan archivos parquet simuland
 | Modelo de Datos | [data-model.md](data-model.md) | 5 entidades, mapeo AS400→PySpark, parametros por notebook, reglas de validacion |
 | Checklist | [checklists/requirements.md](checklists/requirements.md) | Validacion de calidad de la especificacion — 16/16 items PASS |
 
+## Restricciones Criticas de Plataforma
+
+### Computo Serverless — APIs Prohibidas (V2-R5-D1)
+
+| API Prohibida | Alternativa |
+|---------------|-------------|
+| `spark.sparkContext.broadcast()` | Variables Python capturadas por closure (cloudpickle) |
+| `spark.sparkContext.parallelize()` | `spark.createDataFrame()` o `spark.range()` |
+| `spark.sparkContext.*` (cualquier metodo) | Equivalente nativo PySpark sin acceso JVM |
+
+> **CRITICO**: El error `[JVM_ATTRIBUTE_NOT_SUPPORTED]` se produce al intentar acceder a `spark.sparkContext` en Computo Serverless. Fue detectado en pruebas de ejecucion reales (2026-03-28). Ver [research.md](research.md) seccion V2-R5 para detalles completos.
+
+### Protocolo de Almacenamiento (V2-R5-D2)
+
+- **Obligatorio**: `abfss://container@storageaccount.dfs.core.windows.net/ruta/`
+- **Prohibido**: `/mnt/` (DBFS mounts legacy)
+
 ## Prerrequisitos
 
 ### Infraestructura Requerida
@@ -28,6 +45,8 @@ La Version 2 crea 3 notebooks Python (.py) que generan archivos parquet simuland
 1. **Azure Databricks** con Unity Catalog habilitado y Tier Premium
 2. **Computo Serverless** activo y disponible
 3. **External Location** configurado en Unity Catalog, conectado a un contenedor Azure Data Lake Storage Gen2
+   - **IMPORTANTE**: Todas las rutas deben usar protocolo `abfss://` (V2-R5-D2). Formato: `abfss://container@storageaccount.dfs.core.windows.net/ruta/`
+   - Esta **PROHIBIDO** el uso de rutas `/mnt/` (legacy DBFS mounts)
 4. **Extensiones VS Code** instaladas:
    - Databricks extension for Visual Studio Code (`databricks.databricks`)
    - Databricks Driver for SQLTools (`databricks.sqltools-databricks-driver`)
@@ -66,7 +85,7 @@ tests/
 **Primera ejecucion** (5 millones de registros):
 1. Abrir `scripts/GenerarParquets/NbGenerarMaestroCliente.py` en Databricks (o sincronizar via extension VS Code)
 2. Configurar los widgets (parametros) en la interfaz del notebook:
-   - `ruta_salida_parquet`: ruta del External Location (ej: `/mnt/external-location/landing/maestro_clientes`)
+   - `ruta_salida_parquet`: ruta en ADLS Gen2 con protocolo abfss:// (ej: `abfss://container@storageaccount.dfs.core.windows.net/landing/maestro_clientes`)
    - `cantidad_registros_base`: `5000000`
    - `offset_custid`: `100000001`
    - `pct_incremento`: `0.006`
@@ -151,11 +170,82 @@ tests/
 | V4 | Tablas Delta de Bronce (via V3) | Vistas materializadas en Plata con campos calculados |
 | V5 | Vistas de Plata (via V4) | Agregaciones en Oro por cliente |
 
+## Resultados de Ejecucion TDD (2026-03-29)
+
+> **Plataforma**: Azure Databricks con Computo Serverless
+> **Entorno**: Primer ejecucion completa de los 3 generadores + 3 suites TDD
+
+### NbTestMaestroCliente — 11/11 PASADAS ✓
+
+| Prueba | Resultado |
+|--------|-----------|
+| Estructura 70 columnas (H2.1) | PASADO |
+| Tipos de datos PySpark | PASADO |
+| Unicidad CUSTID (5,000,000 unicos) | PASADO |
+| Volumetria (5,000,000 registros) | PASADO |
+| Nombres no latinos (9/9 campos) | PASADO |
+| Parametros dinamicos | PASADO |
+| Rechazo parametros invalidos (RF-016) | PASADO |
+| CUSTNM = FRSTNM + LSTNM | PASADO |
+| Auditoria cero hardcodeados (CE-008) | PASADO |
+| Compatibilidad Serverless (V2-R5-D1) | PASADO |
+| Protocolo abfss:// (V2-R5-D2) | PASADO |
+
+### NbTestTransaccionalCliente — 13/13 PASADAS ✓
+
+| Prueba | Resultado |
+|--------|-----------|
+| Estructura 60 columnas (H2.2) | PASADO |
+| Tipos de datos PySpark | PASADO |
+| Integridad referencial CUSTID (0 huerfanos) | PASADO |
+| TRXTYP vs catalogo (15/15 tipos) | PASADO |
+| Volumetria (15,000,000 registros) | PASADO |
+| Prueba negativa sin Maestro (RF-016) | PASADO |
+| Prueba negativa fecha invalida (RF-016) | PASADO |
+| Distribucion pesos ~60/30/10 | PASADO |
+| Rangos de montos por tipo (RF-017) | PASADO |
+| Unicidad TRXID | PASADO |
+| TRXTM horas/minutos/segundos | PASADO |
+| Compatibilidad Serverless (V2-R5-D1) | PASADO |
+| Protocolo abfss:// (V2-R5-D2) | PASADO |
+
+### NbTestSaldosCliente — 12/12 PASADAS ✓
+
+| Prueba | Resultado |
+|--------|-----------|
+| Estructura 100 columnas (H2.4) | PASADO |
+| Tipos de datos PySpark | PASADO |
+| Relacion 1:1 (N saldos = N clientes) | PASADO |
+| Cero CUSTIDs huerfanos | PASADO |
+| Cero CUSTIDs faltantes | PASADO |
+| Unicidad CUSTID | PASADO |
+| Prueba negativa sin Maestro (RF-016) | PASADO |
+| Rangos por tipo de cuenta (RF-017) | PASADO |
+| Cobertura 100% tipos de cuenta | PASADO |
+| Cero nulos campos criticos | PASADO |
+| Compatibilidad Serverless (V2-R5-D1) | PASADO |
+| Protocolo abfss:// (V2-R5-D2) | PASADO |
+
+### Resumen de Cobertura
+
+| Criterio de Exito | Verificado Por | Estado |
+|--------------------|---------------|--------|
+| CE-001: Maestro < 10 min | Ejecucion en Serverless | ✓ |
+| CE-002: Transaccional < 10 min | Ejecucion en Serverless | ✓ |
+| CE-003: Saldos < 10 min | Ejecucion en Serverless | ✓ |
+| CE-004: Integridad referencial CUSTID | NbTestTransaccionalCliente, NbTestSaldosCliente | ✓ |
+| CE-005: Volumetria 5M / 15M / 5M | Las 3 suites | ✓ |
+| CE-006: Estructura AS400 70/60/100 | Las 3 suites | ✓ |
+| CE-007: 100% pruebas TDD pasan | 36/36 pruebas PASADAS | ✓ |
+| CE-008: Cero valores hardcodeados | NbTestMaestroCliente | ✓ |
+
 ## Decisiones Aprobadas
 
 | ID | Tema | Estado |
 |----|------|--------|
 | V2-R2-D1 | `dbutils.widgets.text()` como tipo principal de widget | APROBADA (2026-03-28) |
 | V2-R3-D1 | Estrategia `write.parquet()` + StructType + reparticion | APROBADA (2026-03-28) |
+| V2-R5-D1 | Prohibicion de spark.sparkContext en Computo Serverless | APROBADA (2026-03-28) |
+| V2-R5-D2 | Protocolo abfss:// obligatorio para parquets | APROBADA (2026-03-28) |
 
-**Todas las decisiones aprobadas (2/2)**. Detalle completo en [research.md](research.md).
+**Todas las decisiones aprobadas (4/4)**. Detalle completo en [research.md](research.md).

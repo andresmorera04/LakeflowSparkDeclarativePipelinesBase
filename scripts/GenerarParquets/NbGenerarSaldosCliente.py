@@ -24,8 +24,8 @@
 # COMMAND ----------
 
 # Parametros de rutas
-dbutils.widgets.text("ruta_salida_parquet", "/mnt/external-location/landing/saldos_clientes", "Ruta de Salida del Parquet")
-dbutils.widgets.text("ruta_maestro_clientes", "/mnt/external-location/landing/maestro_clientes", "Ruta del Parquet del Maestro")
+dbutils.widgets.text("ruta_salida_parquet", "abfss://container@storageaccount.dfs.core.windows.net/landing/saldos_clientes", "Ruta de Salida del Parquet")
+dbutils.widgets.text("ruta_maestro_clientes", "abfss://container@storageaccount.dfs.core.windows.net/landing/maestro_clientes", "Ruta del Parquet del Maestro")
 dbutils.widgets.text("num_particiones", "20", "Numero de Particiones del Parquet")
 
 # Parametros de rangos de montos por tipo de cuenta (RF-017)
@@ -314,30 +314,32 @@ print("Datos de referencia cargados para generacion de saldos.")
 
 # COMMAND ----------
 
-# Broadcast de datos necesarios para la generacion distribuida
-bc_rangos_cuenta = spark.sparkContext.broadcast(rangos_cuenta)
-bc_tipos_cuenta = spark.sparkContext.broadcast(tipos_cuenta)
-bc_pesos_tipos = spark.sparkContext.broadcast(pesos_tipos_cuenta)
-bc_nombres_cuenta = spark.sparkContext.broadcast(nombres_cuenta)
-bc_estados_cuenta = spark.sparkContext.broadcast(estados_cuenta)
-bc_pesos_estados = spark.sparkContext.broadcast(pesos_estados)
-bc_monedas = spark.sparkContext.broadcast(monedas)
-bc_sucursales = spark.sparkContext.broadcast(sucursales)
-bc_nombres_sucursales = spark.sparkContext.broadcast(nombres_sucursales)
-bc_productos = spark.sparkContext.broadcast(productos_por_tipo)
-bc_segmentos = spark.sparkContext.broadcast(segmentos)
-bc_niveles_riesgo = spark.sparkContext.broadcast(niveles_riesgo)
-bc_regiones = spark.sparkContext.broadcast(regiones)
-bc_grupos_cliente = spark.sparkContext.broadcast(grupos_cliente)
-bc_tipos_linea = spark.sparkContext.broadcast(tipos_linea)
-bc_tipos_garantia = spark.sparkContext.broadcast(tipos_garantia)
-bc_frecuencias_pago = spark.sparkContext.broadcast(frecuencias_pago)
-bc_tipos_interes = spark.sparkContext.broadcast(tipos_interes)
-bc_categorias_fiscal = spark.sparkContext.broadcast(categorias_fiscal)
-bc_tipos_chequera = spark.sparkContext.broadcast(tipos_chequera)
-bc_grupos_crediticio = spark.sparkContext.broadcast(grupos_crediticio)
-bc_codigos_clasificacion = spark.sparkContext.broadcast(codigos_clasificacion)
-bc_codigos_fuente = spark.sparkContext.broadcast(codigos_fuente)
+# Datos capturados por closure para generacion distribuida (compatible con Serverless)
+datos_saldos = {
+    "rangos_cuenta": dict(rangos_cuenta),
+    "tipos_cuenta": list(tipos_cuenta),
+    "pesos_tipos": list(pesos_tipos_cuenta),
+    "nombres_cuenta": dict(nombres_cuenta),
+    "estados_cuenta": list(estados_cuenta),
+    "pesos_estados": list(pesos_estados),
+    "monedas": list(monedas),
+    "sucursales": list(sucursales),
+    "nombres_sucursales": list(nombres_sucursales),
+    "productos": dict(productos_por_tipo),
+    "segmentos": list(segmentos),
+    "niveles_riesgo": list(niveles_riesgo),
+    "regiones": list(regiones),
+    "grupos_cliente": list(grupos_cliente),
+    "tipos_linea": list(tipos_linea),
+    "tipos_garantia": list(tipos_garantia),
+    "frecuencias_pago": list(frecuencias_pago),
+    "tipos_interes": list(tipos_interes),
+    "categorias_fiscal": list(categorias_fiscal),
+    "tipos_chequera": list(tipos_chequera),
+    "grupos_crediticio": list(grupos_crediticio),
+    "codigos_clasificacion": list(codigos_clasificacion),
+    "codigos_fuente": list(codigos_fuente)
+}
 
 # COMMAND ----------
 
@@ -351,29 +353,29 @@ def generar_registros_saldos(iterador_particiones):
     Funcion generadora que produce registros de saldos 1:1 con los CUSTIDs recibidos.
     T018 — Cada CUSTID del Maestro genera exactamente un registro de saldo.
     """
-    rangos = bc_rangos_cuenta.value
-    tipos_cta = bc_tipos_cuenta.value
-    pesos_cta = bc_pesos_tipos.value
-    nombres_cta = bc_nombres_cuenta.value
-    estados = bc_estados_cuenta.value
-    pesos_est = bc_pesos_estados.value
-    monedas_l = bc_monedas.value
-    sucursales_l = bc_sucursales.value
-    nombres_suc_l = bc_nombres_sucursales.value
-    productos_l = bc_productos.value
-    segmentos_l = bc_segmentos.value
-    niveles_riesgo_l = bc_niveles_riesgo.value
-    regiones_l = bc_regiones.value
-    grupos_l = bc_grupos_cliente.value
-    tipos_linea_l = bc_tipos_linea.value
-    tipos_garantia_l = bc_tipos_garantia.value
-    frecuencias_l = bc_frecuencias_pago.value
-    tipos_int_l = bc_tipos_interes.value
-    cat_fiscal_l = bc_categorias_fiscal.value
-    tipos_chq_l = bc_tipos_chequera.value
-    grupos_crd_l = bc_grupos_crediticio.value
-    codigos_cls_l = bc_codigos_clasificacion.value
-    codigos_src_l = bc_codigos_fuente.value
+    rangos = datos_saldos["rangos_cuenta"]
+    tipos_cta = datos_saldos["tipos_cuenta"]
+    pesos_cta = datos_saldos["pesos_tipos"]
+    nombres_cta = datos_saldos["nombres_cuenta"]
+    estados = datos_saldos["estados_cuenta"]
+    pesos_est = datos_saldos["pesos_estados"]
+    monedas_l = datos_saldos["monedas"]
+    sucursales_l = datos_saldos["sucursales"]
+    nombres_suc_l = datos_saldos["nombres_sucursales"]
+    productos_l = datos_saldos["productos"]
+    segmentos_l = datos_saldos["segmentos"]
+    niveles_riesgo_l = datos_saldos["niveles_riesgo"]
+    regiones_l = datos_saldos["regiones"]
+    grupos_l = datos_saldos["grupos_cliente"]
+    tipos_linea_l = datos_saldos["tipos_linea"]
+    tipos_garantia_l = datos_saldos["tipos_garantia"]
+    frecuencias_l = datos_saldos["frecuencias_pago"]
+    tipos_int_l = datos_saldos["tipos_interes"]
+    cat_fiscal_l = datos_saldos["categorias_fiscal"]
+    tipos_chq_l = datos_saldos["tipos_chequera"]
+    grupos_crd_l = datos_saldos["grupos_crediticio"]
+    codigos_cls_l = datos_saldos["codigos_clasificacion"]
+    codigos_src_l = datos_saldos["codigos_fuente"]
 
     # Rango de cuenta CRED se combina con el tipo de cuenta INVR para las cuentas que no
     # tienen un rango propio: INVR usa rango_credito

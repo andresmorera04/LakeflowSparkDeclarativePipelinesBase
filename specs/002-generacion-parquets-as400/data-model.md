@@ -200,6 +200,31 @@ Parquet Maestro de Clientes (CUSTID) ──1:1──> Parquet Saldos (CUSTID)
 
 ---
 
+## Restricciones de Plataforma (Post-Implementacion)
+
+### Computo Serverless — APIs Prohibidas (V2-R5-D1)
+
+Los notebooks generadores usan `mapInPandas` para generar datos a escala. En Computo Serverless, `spark.sparkContext` esta **PROHIBIDO** (error `JVM_ATTRIBUTE_NOT_SUPPORTED`). La distribucion de datos de referencia (catalogos, rangos, pesos) a los workers se realiza mediante **closures Python** capturadas por `cloudpickle`, no mediante `broadcast()`.
+
+**Patron implementado**:
+```python
+# Variables Python capturadas automaticamente por cloudpickle
+datos = {"catalogos": list(...), "rangos": dict(...)}
+
+def funcion_generadora(iterador):
+    catalogos = datos["catalogos"]  # Closure — sin broadcast
+    for pdf in iterador:
+        yield pdf
+```
+
+### Protocolo de Almacenamiento Obligatorio (V2-R5-D2)
+
+Todas las rutas de lectura/escritura de parquets deben usar `abfss://`:
+- **Formato**: `abfss://container@storageaccount.dfs.core.windows.net/ruta/recurso`
+- **Prohibido**: `/mnt/` (legacy DBFS mounts)
+
+---
+
 ## Reglas de Validacion (V2 - Generacion de Parquets)
 
 | Regla | Entidad | Descripcion | RF Asociado |
@@ -224,8 +249,9 @@ Parquet Maestro de Clientes (CUSTID) ──1:1──> Parquet Saldos (CUSTID)
 | RV-18 | Todos | Cero valores hardcodeados en el codigo fuente | RF-002 |
 | RV-19 | Todos | Parametros validados al inicio de cada notebook | RF-016 |
 | RV-20 | Todos | Esquema StructType explicito (no inferido) | V2-R3-D1 |
-| RV-21 | Transaccional | Distribucion de TRXTYP por banda: ~60% alta, ~30% media, ~10% baja con tolerancia ±5 puntos porcentuales por banda | RF-008 |
-
+| RV-21 | Transaccional | Distribucion de TRXTYP por banda: ~60% alta, ~30% media, ~10% baja con tolerancia ±5 puntos porcentuales por banda | RF-008 || RV-22 | Todos | Cero uso de `spark.sparkContext` en el codigo fuente (compatibilidad Serverless) | V2-R5-D1 |
+| RV-23 | Todos | Todas las rutas por defecto de widgets usan protocolo `abfss://` (cero rutas `/mnt/`) | V2-R5-D2 |
+| RV-24 | Todos | Datos de referencia distribuidos a workers via closures Python (cloudpickle), no broadcast | V2-R5-D1 |
 ---
 
 ## Parametros por Notebook (dbutils.widgets.text)
@@ -234,7 +260,7 @@ Parquet Maestro de Clientes (CUSTID) ──1:1──> Parquet Saldos (CUSTID)
 
 | Widget | Nombre | Valor por Defecto | Tipo Conversion | Descripcion |
 |--------|--------|-------------------|-----------------|-------------|
-| ruta_salida_parquet | ruta_salida_parquet | (ruta External Location) | str | Ruta del parquet de salida en ADLS Gen2 |
+| ruta_salida_parquet | ruta_salida_parquet | abfss://container@storageaccount.dfs.core.windows.net/landing/maestro_clientes | str | Ruta del parquet de salida en ADLS Gen2 (protocolo abfss:// obligatorio, V2-R5-D2) |
 | cantidad_registros_base | cantidad_registros_base | 5000000 | int | Cantidad de registros en primera ejecucion |
 | pct_incremento | pct_incremento | 0.006 | float | Porcentaje de clientes nuevos por re-ejecucion |
 | pct_mutacion | pct_mutacion | 0.20 | float | Porcentaje de registros con mutacion |
@@ -256,8 +282,8 @@ Parquet Maestro de Clientes (CUSTID) ──1:1──> Parquet Saldos (CUSTID)
 
 | Widget | Nombre | Valor por Defecto | Tipo Conversion | Descripcion |
 |--------|--------|-------------------|-----------------|-------------|
-| ruta_salida_parquet | ruta_salida_parquet | (ruta External Location) | str | Ruta del parquet de salida |
-| ruta_maestro_clientes | ruta_maestro_clientes | (ruta External Location)/maestro_clientes | str | Ruta del parquet del Maestro para leer CUSTIDs |
+| ruta_salida_parquet | ruta_salida_parquet | abfss://container@storageaccount.dfs.core.windows.net/landing/transaccional | str | Ruta del parquet de salida (protocolo abfss:// obligatorio, V2-R5-D2) |
+| ruta_maestro_clientes | ruta_maestro_clientes | abfss://container@storageaccount.dfs.core.windows.net/landing/maestro_clientes | str | Ruta del parquet del Maestro para leer CUSTIDs (protocolo abfss://) |
 | cantidad_registros | cantidad_registros | 15000000 | int | Cantidad de transacciones a generar |
 | fecha_transaccion | fecha_transaccion | 2026-01-01 | str (validar YYYY-MM-DD) | Fecha de todas las transacciones |
 | offset_trxid | offset_trxid | 1 | int | Offset inicial del secuencial de TRXID (RF-018) |
@@ -294,8 +320,8 @@ Parquet Maestro de Clientes (CUSTID) ──1:1──> Parquet Saldos (CUSTID)
 
 | Widget | Nombre | Valor por Defecto | Tipo Conversion | Descripcion |
 |--------|--------|-------------------|-----------------|-------------|
-| ruta_salida_parquet | ruta_salida_parquet | (ruta External Location) | str | Ruta del parquet de salida |
-| ruta_maestro_clientes | ruta_maestro_clientes | (ruta External Location)/maestro_clientes | str | Ruta del parquet del Maestro para leer CUSTIDs |
+| ruta_salida_parquet | ruta_salida_parquet | abfss://container@storageaccount.dfs.core.windows.net/landing/saldos_clientes | str | Ruta del parquet de salida (protocolo abfss:// obligatorio, V2-R5-D2) |
+| ruta_maestro_clientes | ruta_maestro_clientes | abfss://container@storageaccount.dfs.core.windows.net/landing/maestro_clientes | str | Ruta del parquet del Maestro para leer CUSTIDs (protocolo abfss://) |
 | rango_ahorro_min | rango_ahorro_min | 0 | float | Monto minimo cuenta ahorro |
 | rango_ahorro_max | rango_ahorro_max | 500000 | float | Monto maximo cuenta ahorro |
 | rango_corriente_min | rango_corriente_min | 0 | float | Monto minimo cuenta corriente |
