@@ -1,6 +1,6 @@
 # LakeflowSparkDeclarativePipelinesBase Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-03-28
+Auto-generated from all feature plans. Last updated: 2026-03-29
 
 ## Active Technologies
 

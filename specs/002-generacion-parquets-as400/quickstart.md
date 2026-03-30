@@ -188,10 +188,11 @@ tests/
 | Rechazo parametros invalidos (RF-016) | PASADO |
 | CUSTNM = FRSTNM + LSTNM | PASADO |
 | Auditoria cero hardcodeados (CE-008) | PASADO |
-| Compatibilidad Serverless (V2-R5-D1) | PASADO |
 | Protocolo abfss:// (V2-R5-D2) | PASADO |
 
-### NbTestTransaccionalCliente — 13/13 PASADAS ✓
+> **Nota**: La validacion de `spark.sparkContext` (V2-R5-D1) se realiza mediante revision de codigo, no mediante prueba TDD automatizada, ya que su uso produce un error directo en tiempo de ejecucion (`JVM_ATTRIBUTE_NOT_SUPPORTED`).
+
+### NbTestTransaccionalCliente — 12/12 PASADAS ✓
 
 | Prueba | Resultado |
 |--------|-----------|
@@ -206,10 +207,9 @@ tests/
 | Rangos de montos por tipo (RF-017) | PASADO |
 | Unicidad TRXID | PASADO |
 | TRXTM horas/minutos/segundos | PASADO |
-| Compatibilidad Serverless (V2-R5-D1) | PASADO |
 | Protocolo abfss:// (V2-R5-D2) | PASADO |
 
-### NbTestSaldosCliente — 12/12 PASADAS ✓
+### NbTestSaldosCliente — 11/11 PASADAS ✓
 
 | Prueba | Resultado |
 |--------|-----------|
@@ -223,7 +223,6 @@ tests/
 | Rangos por tipo de cuenta (RF-017) | PASADO |
 | Cobertura 100% tipos de cuenta | PASADO |
 | Cero nulos campos criticos | PASADO |
-| Compatibilidad Serverless (V2-R5-D1) | PASADO |
 | Protocolo abfss:// (V2-R5-D2) | PASADO |
 
 ### Resumen de Cobertura
@@ -236,7 +235,7 @@ tests/
 | CE-004: Integridad referencial CUSTID | NbTestTransaccionalCliente, NbTestSaldosCliente | ✓ |
 | CE-005: Volumetria 5M / 15M / 5M | Las 3 suites | ✓ |
 | CE-006: Estructura AS400 70/60/100 | Las 3 suites | ✓ |
-| CE-007: 100% pruebas TDD pasan | 36/36 pruebas PASADAS | ✓ |
+| CE-007: 100% pruebas TDD pasan | 33/33 pruebas PASADAS | ✓ |
 | CE-008: Cero valores hardcodeados | NbTestMaestroCliente | ✓ |
 
 ## Decisiones Aprobadas

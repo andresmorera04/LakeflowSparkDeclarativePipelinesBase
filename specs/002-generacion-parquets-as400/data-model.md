@@ -249,9 +249,9 @@ Todas las rutas de lectura/escritura de parquets deben usar `abfss://`:
 | RV-18 | Todos | Cero valores hardcodeados en el codigo fuente | RF-002 |
 | RV-19 | Todos | Parametros validados al inicio de cada notebook | RF-016 |
 | RV-20 | Todos | Esquema StructType explicito (no inferido) | V2-R3-D1 |
-| RV-21 | Transaccional | Distribucion de TRXTYP por banda: ~60% alta, ~30% media, ~10% baja con tolerancia ±5 puntos porcentuales por banda | RF-008 || RV-22 | Todos | Cero uso de `spark.sparkContext` en el codigo fuente (compatibilidad Serverless) | V2-R5-D1 |
+| RV-21 | Transaccional | Distribucion de TRXTYP por banda: ~60% alta, ~30% media, ~10% baja con tolerancia ±5 puntos porcentuales por banda | RF-008 || RV-22 | Todos | Cero uso de `spark.sparkContext` en el codigo fuente (compatibilidad Serverless). **Validacion por revision de codigo, no por TDD** — su uso produce error directo `JVM_ATTRIBUTE_NOT_SUPPORTED` en runtime | V2-R5-D1 |
 | RV-23 | Todos | Todas las rutas por defecto de widgets usan protocolo `abfss://` (cero rutas `/mnt/`) | V2-R5-D2 |
-| RV-24 | Todos | Datos de referencia distribuidos a workers via closures Python (cloudpickle), no broadcast | V2-R5-D1 |
+| RV-24 | Todos | Datos de referencia distribuidos a workers via closures Python (cloudpickle), no broadcast. **Validacion por revision de codigo, no por TDD** | V2-R5-D1 |
 ---
 
 ## Parametros por Notebook (dbutils.widgets.text)

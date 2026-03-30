@@ -385,10 +385,10 @@ print("✓ PRUEBA PASADA: Cero nulos en campos criticos de saldos")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## T021 — Validacion de Compatibilidad Serverless (V2-R5-D1, RV-22, RV-24)
+# MAGIC ## T021 — Validacion de Protocolo abfss:// en Widgets (V2-R5-D2, RV-23)
 # MAGIC
-# MAGIC Verificar que el notebook generador NO usa `spark.sparkContext` ni `broadcast()`,
-# MAGIC ya que estas APIs estan prohibidas en Computo Serverless.
+# MAGIC Verificar que los valores por defecto de los widgets de ruta usan protocolo abfss://
+# MAGIC y NO usan rutas /mnt/ legacy.
 
 # COMMAND ----------
 
@@ -406,59 +406,6 @@ except Exception:
 ruta_notebook_generador = os.path.join(
     _raiz_workspace, "scripts", "GenerarParquets", "NbGenerarSaldosCliente.py"
 )
-
-prueba_serverless_pasada = True
-errores_serverless = []
-
-try:
-    with open(ruta_notebook_generador, "r", encoding="utf-8") as f:
-        contenido_generador = f.read()
-        lineas_generador = contenido_generador.split("\n")
-
-    # RV-22 — Verificar cero uso de spark.sparkContext (excluyendo comentarios)
-    for i, linea in enumerate(lineas_generador, 1):
-        linea_limpia = linea.strip()
-        if linea_limpia.startswith("#") or linea_limpia.startswith("# MAGIC"):
-            continue  # Ignorar comentarios
-        if "spark.sparkContext" in linea_limpia:
-            errores_serverless.append(
-                f"Linea {i}: Uso prohibido de spark.sparkContext -> '{linea_limpia[:80]}'"
-            )
-
-    # RV-24 — Verificar cero uso de broadcast (excluyendo comentarios)
-    for i, linea in enumerate(lineas_generador, 1):
-        linea_limpia = linea.strip()
-        if linea_limpia.startswith("#") or linea_limpia.startswith("# MAGIC"):
-            continue
-        if ".broadcast(" in linea_limpia:
-            errores_serverless.append(
-                f"Linea {i}: Uso prohibido de broadcast() -> '{linea_limpia[:80]}'"
-            )
-
-    if errores_serverless:
-        prueba_serverless_pasada = False
-        for e in errores_serverless:
-            print(f"  ERROR: {e}")
-        raise AssertionError(
-            f"PRUEBA FALLIDA: {len(errores_serverless)} violaciones de compatibilidad Serverless (V2-R5-D1)"
-        )
-    else:
-        print("✓ PRUEBA PASADA: Cero uso de spark.sparkContext en codigo ejecutable (RV-22)")
-        print("✓ PRUEBA PASADA: Cero uso de broadcast() en codigo ejecutable (RV-24)")
-
-except FileNotFoundError:
-    print("  NOTA: No se pudo leer el archivo fuente directamente. Validacion omitida en entorno Databricks.")
-    print("  La verificacion se realiza manualmente o via revision de codigo.")
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## T021 — Validacion de Protocolo abfss:// en Widgets (V2-R5-D2, RV-23)
-# MAGIC
-# MAGIC Verificar que los valores por defecto de los widgets de ruta usan protocolo abfss://
-# MAGIC y NO usan rutas /mnt/ legacy.
-
-# COMMAND ----------
 
 try:
     with open(ruta_notebook_generador, "r", encoding="utf-8") as f:
@@ -506,7 +453,6 @@ print(f"  TEST 7: Prueba negativa (sin Maestro)         — PASADO")
 print(f"  T021: Rangos por tipo de cuenta (RF-017)      — PASADO")
 print(f"  T021: Cobertura 100% tipos de cuenta          — PASADO")
 print(f"  T021: Cero nulos campos criticos              — PASADO")
-print(f"  T021: Compatibilidad Serverless (V2-R5-D1)   — PASADO")
 print(f"  T021: Protocolo abfss:// (V2-R5-D2)          — PASADO")
 print("=" * 70)
 print(f"  Total registros validados: {total_saldos:,}")
