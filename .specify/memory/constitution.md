@@ -2,6 +2,25 @@
 ====================================================================
 INFORME DE SINCRONIZACION (Sync Impact Report)
 ====================================================================
+
+--- Enmienda 1.0.1 (2026-03-30) ---
+- Cambio de version: 1.0.0 -> 1.0.1 (PATCH)
+- Principios modificados:
+  - Principio VI (Arquitectura Medallon): Se alinea el bullet
+    de Transaccional en Plata con la decision R9-D1 de V4 —
+    refresh_policy='auto' gestionado por LSDP en lugar de
+    incrementalidad forzada.
+- Secciones agregadas: ninguna
+- Secciones eliminadas: ninguna
+- Plantillas verificadas:
+  - .specify/templates/plan-template.md: sin cambios requeridos
+  - .specify/templates/spec-template.md: sin cambios requeridos
+  - .specify/templates/tasks-template.md: sin cambios requeridos
+  - .specify/templates/checklist-template.md: sin cambios requeridos
+  - .specify/templates/commands/: no existen archivos de comandos
+- TODOs pendientes: ninguno
+
+--- Version inicial 1.0.0 (2026-03-27) ---
 - Cambio de version: N/A -> 1.0.0 (version inicial)
 - Principios creados:
   1. Dinamismo Absoluto (Cero Hard-Coded)
@@ -152,8 +171,9 @@ de acumulacion:
     (siempre datos mas recientes). El procesamiento DEBE cumplir
     con los mas altos niveles de optimizacion.
   - Transaccional: vista materializada separada que DEBE
-    procesarse de forma incremental, agregando solo registros
-    nuevos en cada ejecucion.
+    aprovechar la gestion automatica de actualizacion de LSDP
+    (refresh_policy por defecto), permitiendo que el framework
+    determine la estrategia optima de procesamiento.
   - Plata DEBE contemplar enriquecimiento de datos y calculos
     fila por fila generados con dos o mas campos de las tablas
     delta de Bronce.
@@ -311,4 +331,4 @@ DEBEN cumplir con los principios aqui establecidos.
 - Toda PR o revision de codigo DEBE validar adherencia a los
   principios aqui definidos.
 
-**Version**: 1.0.0 | **Ratificada**: 2026-03-27 | **Ultima Enmienda**: 2026-03-27
+**Version**: 1.0.1 | **Ratificada**: 2026-03-27 | **Ultima Enmienda**: 2026-03-30
