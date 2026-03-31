@@ -1,8 +1,8 @@
 # LsdpConexionAzureSql — Lectura Dinamica de Parametros desde Azure SQL
 #
-# Proposito: Leer los 4 parametros de configuracion (catalogoBronce, contenedorBronce,
-# datalake, DirectorioBronce) desde la tabla dbo.Parametros en Azure SQL Server
-# usando JDBC con 2 secretos almacenados en Azure Key Vault via Scope Secret de Databricks.
+# Proposito: Leer TODOS los parametros de configuracion desde la tabla dbo.Parametros
+# en Azure SQL Server usando JDBC con 2 secretos almacenados en Azure Key Vault via
+# Scope Secret de Databricks. Retorna el diccionario completo sin filtro (RF-019).
 #
 # Patron: Funcion pura reutilizable. Este archivo solo define la funcion; no ejecuta
 # codigo a nivel de modulo. Los archivos de transformacion invocan esta funcion a nivel de
@@ -39,19 +39,16 @@ def leer_parametros_azure_sql(spark, dbutils, nombre_scope_secret):
     Retorna
     -------
     dict
-        Diccionario con exactamente 4 claves de configuracion:
+        Diccionario con TODAS las claves de dbo.Parametros (RF-019). Ejemplo:
         {
-            "catalogoBronce"   : str,  -- Catalogo de Unity Catalog (ej: "bronce_dev")
+            "catalogoBronce"   : str,  -- Catalogo de Unity Catalog bronce (ej: "bronce_dev")
             "contenedorBronce" : str,  -- Contenedor ADLS Gen2 (ej: "bronce")
             "datalake"         : str,  -- Storage Account ADLS Gen2 (ej: "adlsg2datalakedev")
-            "DirectorioBronce" : str   -- Directorio raiz en el contenedor (ej: "archivos")
+            "DirectorioBronce" : str,  -- Directorio raiz en el contenedor (ej: "archivos")
+            "catalogoPlata"    : str,  -- Catalogo de Unity Catalog plata (ej: "plata_dev")
+            ...                        -- Cualquier otra clave presente en dbo.Parametros
         }
-
-    Lanza
-    -----
-    ValueError
-        Si alguna de las 4 claves requeridas no se encuentra en dbo.Parametros.
-        El mensaje de error incluye las claves faltantes y las claves disponibles.
+        El codigo consumidor selecciona las claves que necesita del diccionario.
     """
 
     # -------------------------------------------------------------------------
@@ -104,24 +101,7 @@ def leer_parametros_azure_sql(spark, dbutils, nombre_scope_secret):
     params_dict = {fila["Clave"]: fila["Valor"] for fila in filas}
 
     # -------------------------------------------------------------------------
-    # Paso 6: Validar que todas las claves requeridas esten presentes
-    # Si falta alguna clave, se lanza un ValueError con mensaje descriptivo
-    # para facilitar el diagnostico en el pipeline.
+    # Paso 6: Retornar el diccionario completo con TODAS las claves (RF-019)
+    # El codigo consumidor selecciona las claves que necesita.
     # -------------------------------------------------------------------------
-    claves_requeridas = ["catalogoBronce", "contenedorBronce", "datalake", "DirectorioBronce"]
-    claves_faltantes = [clave for clave in claves_requeridas if clave not in params_dict]
-
-    if claves_faltantes:
-        raise ValueError(
-            f"ERROR: Las siguientes claves requeridas no se encontraron en dbo.Parametros: "
-            f"{claves_faltantes}. "
-            f"Claves disponibles en dbo.Parametros: {list(params_dict.keys())}. "
-            f"Verificar que la tabla dbo.Parametros este correctamente poblada."
-        )
-
-    # -------------------------------------------------------------------------
-    # Paso 7: Retornar solo las 4 claves requeridas como diccionario
-    # Se excluyen otras claves que puedan existir en dbo.Parametros para
-    # garantizar una interfaz estable y predecible (principio de minimo acceso).
-    # -------------------------------------------------------------------------
-    return {clave: params_dict[clave] for clave in claves_requeridas}
+    return params_dict

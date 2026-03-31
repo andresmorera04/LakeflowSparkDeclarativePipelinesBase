@@ -1,6 +1,6 @@
 # LakeflowSparkDeclarativePipelinesBase Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-03-29
+Auto-generated from all feature plans. Last updated: 2026-03-30
 
 ## Active Technologies
 
@@ -22,6 +22,7 @@ tests/
 : Follow standard conventions
 
 ## Recent Changes
+- 004-lsdp-medalla-plata: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 
 - 002-generacion-parquets-as400: Added
 
