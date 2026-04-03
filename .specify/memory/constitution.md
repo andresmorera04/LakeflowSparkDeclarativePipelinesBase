@@ -3,6 +3,22 @@
 INFORME DE SINCRONIZACION (Sync Impact Report)
 ====================================================================
 
+--- Enmienda 1.0.2 (2026-04-01) ---
+- Cambio de version: 1.0.1 -> 1.0.2 (PATCH)
+- Principios modificados:
+  - Principio III (TDD): Se agrega excepcion explicita para
+    versiones cuyo entregable sea exclusivamente documentacion
+    Markdown sin codigo ejecutable (motivado por V6).
+- Secciones agregadas: ninguna
+- Secciones eliminadas: ninguna
+- Plantillas verificadas:
+  - .specify/templates/plan-template.md: sin cambios requeridos
+  - .specify/templates/spec-template.md: sin cambios requeridos
+  - .specify/templates/tasks-template.md: sin cambios requeridos
+  - .specify/templates/checklist-template.md: sin cambios requeridos
+  - .specify/templates/commands/: no existen archivos de comandos
+- TODOs pendientes: ninguno
+
 --- Enmienda 1.0.1 (2026-03-30) ---
 - Cambio de version: 1.0.0 -> 1.0.1 (PATCH)
 - Principios modificados:
@@ -96,8 +112,10 @@ Databricks para Visual Studio Code mencionadas en el Principio II.
 
 - El ciclo TDD (Red-Green-Refactor) DEBE aplicarse de forma
   estricta.
-- Cada version del proyecto (excepto la Version 1 de research)
-  DEBE incluir su conjunto de pruebas.
+- Cada version del proyecto (excepto la Version 1 de research
+  y versiones cuyo entregable sea exclusivamente documentacion
+  Markdown sin codigo ejecutable) DEBE incluir su conjunto de
+  pruebas.
 - Las pruebas DEBEN verificar funcionalidad, compatibilidad con
   el entorno Serverless y optimizacion del codigo.
 
